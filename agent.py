@@ -1,9 +1,10 @@
 # from cysystemd.reader import JournalReader, JournalOpenMode
 import systemd.journal
 import pwd, grp
-import asyncio
+import asyncio, aiohttp
 
 SYSLOG_IDENTIFIER = ["su", "sudo", "login", "systemd-logind", "lightdm", "sshd", "useradd", "usermod", "userdel", "adduser", "deluser", "groupadd", "groupmod", "groupdel", "addgroup", "delgroup"]
+SERVER_URL = "http://localhost:3001/api/logs/storage"
 
 class MonitorAgent:
     def __init__(self):
@@ -11,13 +12,13 @@ class MonitorAgent:
         self.session = None
 
     async def run(self):
-        # await self.init_session()
+        await self.init_session()
         try:
             await self.monitor_journal()
         except KeyboardInterrupt:
             print("Остановка мониторинга...")
         finally:
-            # await self.close_session()
+            await self.close_session()
             self.journal_obj.close()
 
     async def monitor_journal(self):
@@ -32,6 +33,13 @@ class MonitorAgent:
                     tasks.append(task)
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def init_session(self):
+        self.session = aiohttp.ClientSession()
+    
+    async def close_session(self):
+        if self.session:
+            await self.session.close()
 
     async def get_username(self, uid):
         try:
@@ -48,10 +56,12 @@ class MonitorAgent:
             return "unknown"
         
     async def process_log(self, index, log):
-        log_to_send = log
+        log_to_send = {}
+        for key, value in log.items():
+            log_to_send[key] = str(value)
         user = await self.get_username(int(log.get("_UID")))
         group = await self.get_group(int(log.get("_GID")))
-        log_to_send.update({"USERNAME": user, "GROUPNAME": group})
+        log_to_send.update({"UserName": user, "GroupName": group})
         print(f"Обработка лога: {index} для юзера {user} | {group}. Тип данных - {type(log)}")
         return log_to_send
 
@@ -63,7 +73,21 @@ class MonitorAgent:
             print(f"Ошибка обработки записи: {e}")
 
     async def send_to_node(self, index, log):
-        print(f"Лог отправлен на сервер: {index, log}")
+        if not self.session:
+            return
+        try:
+            async with self.session.post(
+                SERVER_URL,
+                json=log,
+                headers={'Content-Type': 'application/json'},
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                if response.status == 200:
+                    print(f"✓ Лог отправлен: {log.get('SYSLOG_IDENTIFIER')}")
+                else:
+                    print(f"✗ Ошибка отправки: {response.status}")
+        except Exception as e:
+            print(f"✗ Ошибка соединения: {e}")
 
 async def main():
     agent_obj = MonitorAgent()

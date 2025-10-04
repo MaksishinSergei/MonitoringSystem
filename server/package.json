@@ -1,0 +1,15 @@
+{
+  "name": "log-server",
+  "version": "1.0.0",
+  "description": "Server for receiving logs from Python agent",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^9.1.1",
+    "config": "^4.1.1",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0"
+  }
+}
