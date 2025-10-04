@@ -100,7 +100,6 @@ app.post('/api/logs/storage', async(req, res) => {
     }
 });
 
-// // Новый endpoint для проверки статуса Elasticsearch
 // app.get('/api/health', async (req, res) => {
 //   try {
 //     const health = await elasticClient.cluster.health();
